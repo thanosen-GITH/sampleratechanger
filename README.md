@@ -56,13 +56,13 @@ gcc -O2 -Wall -Wextra -std=c11 main.c -lm -o sampleratechanger.exe
 ```sh
 ./sampleratechanger -v <wavefile1> <wavefile2> ... <wavefileN> <target_sample_rate>
 ```
--v
+-v:
 Optional verbose output
 
-<wavefile1> ... <wavefileN>
+wavefile1 ... wavefileN:
 One or more audio files (up to 2048 files per invocation)
 
-<target_sample_rate>
+target_sample_rate:
 Desired sample rate in Hz (e.g. 44100, 48000, 96000, etc.)
 
 ### Examples
