@@ -44,6 +44,7 @@ Large files (>4 GB) are supported.
 ```sh
 cc -O2 -Wall -Wextra -std=c11 -D_FILE_OFFSET_BITS=64 main.c -lm -o sampleratechanger
 ```
+even easier: make
 
 ### Windows (MinGW)
 ```sh
