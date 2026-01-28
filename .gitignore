@@ -1,0 +1,14 @@
+# build artifacts
+sampleratechanger
+sampleratechanger.exe
+*.o
+*.obj
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+
+# temporary files
+*.tmp
+*.swp
+*~
