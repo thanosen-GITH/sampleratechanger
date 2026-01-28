@@ -43,7 +43,7 @@ int removeslashprefix(char *str);
 int suffix(char *in,char *out);
 unsigned int fmtpos(char *in,size_t readlen);
 int samplerateread(char *,wavfile *,int);
-int sampleratewrite(char *path,wavfile *,unsigned int,int);
+int sampleratewrite(char *path,wavfile *,unsigned int);
 
 static const uint8_t W64_GUID_RIFF[16] = {
     0x72,0x69,0x66,0x66, 0x2E,0x91,0xCF,0x11, 0xA5,0xD6,0x28,0xDB,0x04,0xC1,0x00,0x00
@@ -54,9 +54,9 @@ static const uint8_t W64_GUID_WAVE[16] = {
 static const uint8_t W64_GUID_FMT[16] = {
     0x66,0x6D,0x74,0x20, 0xF3,0xAC,0xD3,0x11, 0x8C,0xD1,0x00,0xC0,0x4F,0x8E,0xDB,0x8A
 };
-static const uint8_t W64_GUID_DATA[16] = {
-    0x64,0x61,0x74,0x61, 0xF3,0xAC,0xD3,0x11, 0x8C,0xD1,0x00,0xC0,0x4F,0x8E,0xDB,0x8A
-};
+// static const uint8_t W64_GUID_DATA[16] = {
+//     0x64,0x61,0x74,0x61, 0xF3,0xAC,0xD3,0x11, 0x8C,0xD1,0x00,0xC0,0x4F,0x8E,0xDB,0x8A
+// };
 
 static int guid_eq(const uint8_t a[16], const uint8_t b[16]) {
     return memcmp(a, b, 16) == 0;
@@ -297,7 +297,7 @@ int main(int argc, char** argv) {
         if(wav1.sample_rate!=SR) {
 
             //SR = SR/wav1.mult;
-            i = sampleratewrite(path,&wav1,SR,verbose);
+            i = sampleratewrite(path,&wav1,SR);
             if(i<0) {
                 printf("Processing of %s failed due to data input error!, Exiting\n",
                     name);
@@ -391,7 +391,7 @@ unsigned int fmtpos(char *in,size_t len) {
     
     else;
     
-    int i=0;
+    size_t i=0;
     unsigned int pos=0;
     while(memcmp(in+i,"fmt ",4) && i<=len-4) {
         i++;
@@ -416,7 +416,6 @@ int samplerateread(char *path,wavfile *w,int v) {
     }
     else ;
     
-    int i;
     char internal_buffer[9]="\0",*header_buffer=NULL;
     
     header_buffer = malloc(max_data_pos); if(!header_buffer) {
@@ -432,7 +431,7 @@ int samplerateread(char *path,wavfile *w,int v) {
     }
     
     strcpy(w->name,path);
-    i = removeslashprefix(w->name);
+    removeslashprefix(w->name);
     
     if(v) printf("%s opened\n",w->name);
     suffix(w->name,w->suffix);
@@ -456,7 +455,7 @@ int samplerateread(char *path,wavfile *w,int v) {
 
     if(!strcasecmp(w->suffix,"aif")||!strcasecmp(w->suffix,"aiff")) {
         
-        i=fread(header_buffer,1,readlen,f);
+        size_t i=fread(header_buffer,1,readlen,f);
     
         if(i!=readlen) {
             perror("read file problem");
@@ -477,8 +476,8 @@ int samplerateread(char *path,wavfile *w,int v) {
         }
         
         if(v) {
-            printf("Found COMM!\nByte %d\n",i);
-            printf("Sample Rate Byte should be %d\n",i+16);
+            printf("Found COMM!\nByte %zu\n",i);
+            printf("Sample Rate Byte should be %zu\n",i+16);
         }
         
         w->sample_rate_pos=i+16;
@@ -524,7 +523,7 @@ int samplerateread(char *path,wavfile *w,int v) {
             return -1;
         }
 
-        i=fread(header_buffer,1,16,f);
+        size_t i=fread(header_buffer,1,16,f);
     
         if(i!=16) {
             perror("read file problem");
@@ -550,7 +549,7 @@ int samplerateread(char *path,wavfile *w,int v) {
 
     }
     
-    i=fread(header_buffer,1,readlen,f);
+    size_t i=fread(header_buffer,1,readlen,f);
     
     if(i!=readlen) {
         perror("read file problem");
@@ -618,7 +617,7 @@ int samplerateread(char *path,wavfile *w,int v) {
     
 }
 
-int sampleratewrite(char *path,wavfile *w,unsigned int SR,int v) {
+int sampleratewrite(char *path,wavfile *w,unsigned int SR) {
     if (w==NULL) {
         printf("No wav structure available for Sample Rate write!\n");
         return -1;
@@ -641,7 +640,7 @@ int sampleratewrite(char *path,wavfile *w,unsigned int SR,int v) {
         
     printf("%s <- changing sample rate...\n",w->name);
 
-    int i=fseek(f,w->sample_rate_pos,SEEK_SET);
+    size_t i=fseek(f,w->sample_rate_pos,SEEK_SET);
     if(i!=0) {
         perror("sampleratewrite: fseek:");
         fclose(f);
