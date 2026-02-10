@@ -32,7 +32,7 @@ typedef struct wavfile {
     char name[max_path];
     size_t size;
     unsigned int sample_rate;
-    unsigned int byte_rate;
+    unsigned int bit_depth;
     //unsigned int mult;
     unsigned int sample_rate_pos;
     short int endianess; // 0=Little Endian, 1=Big Endian
@@ -288,7 +288,7 @@ int main(int argc, char** argv) {
         i = samplerateread(path,&wav1,verbose);
     
         if(i<0) {
-            printf("Problem with Sampleread of %s!\n",name);
+            if(i!=-2) printf("Problem with Sampleread of %s!\n",name);
             if(j<filenum-1) printf("Skipping to next file...\n");
             fnamepos++;
             continue;
@@ -434,7 +434,7 @@ int samplerateread(char *path,wavfile *w,int v) {
     removeslashprefix(w->name);
     
     if(v) printf("%s opened\n",w->name);
-    suffix(w->name,w->suffix);
+    suffix(w->name,w->suffix); //printf("suffix: %s\n",w->suffix);
 
     if(fseek(f,0,SEEK_END)) { // go to end
         perror("samplerateread: fseek:");
@@ -451,7 +451,35 @@ int samplerateread(char *path,wavfile *w,int v) {
         return -1;
     }
     size_t readlen = max_data_pos;
-    if(readlen>w->size) readlen = w->size; 
+    if(readlen>w->size) readlen = w->size;
+    
+    if(!strcasecmp(w->suffix,"flac")) {
+        size_t i = fread(header_buffer,1,readlen,f);
+        if(i!=readlen) {
+            perror("read file problem");
+            if(header_buffer) { free(header_buffer); header_buffer = NULL; }
+            fclose(f);
+            return -1;
+        }
+        if( (memcmp(header_buffer, "fLaC", 4)) || ((header_buffer[4] & 0x7F) != 0) ) {
+            printf("samplerateread: Invalid header structure for flac file!\n");
+            if(header_buffer) { free(header_buffer); header_buffer = NULL; }
+            fclose(f);
+            return -1;
+        }
+        w->sample_rate_pos = 18;
+        w->endianess = 1;
+        w->sample_rate = ((uint32_t)(uint8_t)header_buffer[18] << 12) |
+                         ((uint32_t)(uint8_t)header_buffer[19] << 4)  |
+                         ((uint32_t)((uint8_t)header_buffer[20] & 0xF0) >> 4);
+        w->bit_depth = ((header_buffer[20] & 0x01) << 4) | ( (((header_buffer[21] & 0xF0) >> 4) + 1) );
+        if(v) {
+            printf("Found samplerate for flac at byte 18: %u. FLAC endianess is big\n",w->sample_rate);
+        }
+
+        printf("FLAC files are detected but not modified!\nInfo: Sample Rate is %u (just STREAMINFO)\n",w->sample_rate);
+        return -2;
+    }
 
     if(!strcasecmp(w->suffix,"aif")||!strcasecmp(w->suffix,"aiff")) {
         
@@ -505,7 +533,7 @@ int samplerateread(char *path,wavfile *w,int v) {
         if(v) printf("Big Endian\n");
         w->endianess=1; // AIFF always big endian
         
-        w->byte_rate=0; // AIFF has no byte rate field stored in file
+        w->bit_depth=0; // AIFF has no bit depth field stored in file
 
         free(header_buffer);
         fclose(f);
@@ -538,7 +566,7 @@ int samplerateread(char *path,wavfile *w,int v) {
         (int)(unsigned char)header_buffer[2]*65536 +
         (int)(unsigned char)header_buffer[3]*16777216;
 
-        w->byte_rate = (int)(unsigned char)header_buffer[4] +
+        w->bit_depth = (int)(unsigned char)header_buffer[4] +
         (int)(unsigned char)header_buffer[5]*256 +
         (int)(unsigned char)header_buffer[6]*65536 +
         (int)(unsigned char)header_buffer[7]*16777216;
@@ -591,7 +619,7 @@ int samplerateread(char *path,wavfile *w,int v) {
         (int)(unsigned char)header_buffer[w->sample_rate_pos+2]*256 +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+1]*65536 +
         (int)(unsigned char)header_buffer[w->sample_rate_pos]*16777216;
-        w->byte_rate = (int)(unsigned char)header_buffer[w->sample_rate_pos+7] +
+        w->bit_depth = (int)(unsigned char)header_buffer[w->sample_rate_pos+7] +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+6]*256 +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+5]*65536 +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+4]*16777216;
@@ -601,7 +629,7 @@ int samplerateread(char *path,wavfile *w,int v) {
         (int)(unsigned char)header_buffer[w->sample_rate_pos+1]*256 + 
         (int)(unsigned char)header_buffer[w->sample_rate_pos+2]*65536 +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+3]*16777216;
-        w->byte_rate = (int)(unsigned char)header_buffer[w->sample_rate_pos+4] +
+        w->bit_depth = (int)(unsigned char)header_buffer[w->sample_rate_pos+4] +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+5]*256 +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+6]*65536 +
         (int)(unsigned char)header_buffer[w->sample_rate_pos+7]*16777216;
@@ -648,6 +676,33 @@ int sampleratewrite(char *path,wavfile *w,unsigned int SR) {
     }
     //printf("1\n"); getchar(); //Debugging
 
+    // if(!strcasecmp(w->suffix,"flac")) {
+    //     uint8_t original_bytes[3];
+    //     i = fread(original_bytes,1,3,f);
+    //     if(i!=3) {
+    //         perror("sampleratewrite: fread:");
+    //         fclose(f);
+    //         return 0;
+    //     }
+
+    //     i=fseek(f,w->sample_rate_pos,SEEK_SET);
+    //     if(i!=0) {
+    //         perror("sampleratewrite: fseek:");
+    //         fclose(f);
+    //         return 0;
+    //     }
+
+    //     unsigned char byte[3] = {SR >> 12, (SR & 0x00FF0) >> 4, (SR & 0x0000F) | original_bytes[2]}; //printf("%02x%02x%02x\n",byte[0],byte[1],byte[2]);
+
+    //    i = fwrite(byte,1,3,f);
+    //    if(i!=3) {
+    //     perror("sampleratewrite: fwrite:");
+    //    }
+
+    //    fclose(f);
+    //    return 0;
+    // }
+
     if(!strcasecmp(w->suffix,"aif")||!strcasecmp(w->suffix,"aiff")) {
         // w->sample_rate_pos should point to the start of the 10-byte ext80 sampleRate in COMM
         if (fseek(f, w->sample_rate_pos, SEEK_SET) != 0) {
@@ -687,8 +742,8 @@ int sampleratewrite(char *path,wavfile *w,unsigned int SR) {
 
         // Scale byteRate using old header values (your current approach)
         uint32_t new_br = 0;
-        if (w->sample_rate != 0 && w->byte_rate != 0) {
-            uint64_t tmp = (uint64_t)w->byte_rate * (uint64_t)SR;
+        if (w->sample_rate != 0 && w->bit_depth != 0) {
+            uint64_t tmp = (uint64_t)w->bit_depth * (uint64_t)SR;
             new_br = (uint32_t)(tmp / (uint64_t)w->sample_rate);
         }
 
@@ -706,8 +761,8 @@ int sampleratewrite(char *path,wavfile *w,unsigned int SR) {
        (SR & 0x0000FF00) >> 8, SR & 0x000000FF};
 
     uint32_t byteRate = 0; bool byteRate_ok = false;
-    if (w->sample_rate != 0 && w->byte_rate != 0) {
-        uint64_t tmp = (uint64_t)w->byte_rate * (uint64_t)SR;
+    if (w->sample_rate != 0 && w->bit_depth != 0) {
+        uint64_t tmp = (uint64_t)w->bit_depth * (uint64_t)SR;
         byteRate = (uint32_t)(tmp / (uint64_t)w->sample_rate);
         byteRate_ok = true;
     }
@@ -736,3 +791,5 @@ int sampleratewrite(char *path,wavfile *w,unsigned int SR) {
     
     return 0;
 }
+
+
